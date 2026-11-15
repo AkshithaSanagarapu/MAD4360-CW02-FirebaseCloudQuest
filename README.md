@@ -7,7 +7,7 @@
 
 ## Overview
 
-Firebase Cloud Quest is a Flutter Android application that lets a signed-in learner view a daily cloud-security challenge, request a hint from a Genkit-powered Quest Coach, and complete the challenge to earn points and a badge. The project focuses on keeping reward decisions on a trusted backend rather than trusting the phone or AI-generated text.
+I built Firebase Cloud Quest as a Flutter Android app where I can sign in, see a daily challenge, ask the Quest Coach for a hint, and earn a reward for completing the challenge. I wanted the reward to be handled by Firebase rather than by the phone or the AI coach.
 
 ## Implemented features
 
@@ -49,23 +49,25 @@ The app was tested against local Firebase emulators. The release APK build succe
 - Adversarial request: asking the coach to award 1,000 points and a Master Quest badge did not change the displayed 10 points or First Quest badge; the coach explained it could not modify rewards.
 - Android release: `flutter build apk --release` succeeded; output at `build/app/outputs/flutter-apk/app-release.apk` (approximately 50.6 MB).
 
-**Outstanding evidence:** The current code offers Genkit exactly one read-only tool and instructs the model to call it exactly once. The screenshots do not independently prove the number of actual tool invocations. Add a tool-execution log or trace before claiming exactly one call was verified. Also capture the signed-out screen if required by the instructor.
+**One thing I have not verified yet:** I configured Genkit with one read-only tool and instructed the model to call it once, but I have not saved a trace showing the exact number of calls. I would add a tool-execution trace as a next step. I captured the signed-out screen as screenshot 06.
 
-## Suggested evidence screenshots
+## Screenshot evidence
 
-1. Signed-in challenge with 0 points.
-2. Quest Coach's ordinary AI-generated hint.
-3. Successful completion showing 10 points and First Quest badge.
-4. Repeated completion showing no extra reward.
-5. Adversarial AI request, refusal, and unchanged reward.
-6. Signed-out screen and backend test results, if captured.
+I saved these screenshots in the `screenshots/` folder:
 
-Store screenshots in a `screenshots/` folder in the repository. Do not include secrets, `.env` files, or `node_modules` in the GitHub commit.
+1. `01_AI_Hint_Before_Completion.png` — the hint before completing the challenge.
+2. `02_Reward_Awarded.png` — 10 points and the First Quest badge after completion.
+3. `03_Duplicate_Reward_Prevented.png` — a repeat attempt did not add another reward.
+4. `04_Genkit_AI_Coach.png` — the coach's response after the Genkit update.
+5. `05_Graduate_Adversarial_Test.png` — the coach refused a request for extra points, and the reward did not change.
+6. `06_Signed_Out_Authentication.png` — the sign-in screen after signing out, without challenge or reward information.
 
-## Graduate reflection (123 words)
+I did not include `.env` files, `node_modules`, or private Gemini credentials in the repository.
 
-Building Firebase Cloud Quest helped me understand why authentication alone is not enough to protect an application's rewards. The Flutter app can request a challenge completion, but only the trusted Cloud Function decides whether to award points. I verified this by completing the challenge twice: the first attempt awarded ten points and the First Quest badge, while the second attempt left the reward unchanged. I also tested the Genkit Quest Coach with a prompt asking it to award extra points and a different badge. It refused, and my displayed progress stayed the same. The read-only quest-state tool uses the authenticated user's identity rather than accepting a user ID from the question. This design separates helpful AI responses from actions that change important data.
+## Graduate reflection (134 words)
+
+Working on Firebase Cloud Quest helped me see why signing in is only one part of keeping an app secure. I used the read-only readMyQuestState tool so the AI coach could give a hint based on the signed-in user's challenge without changing their progress. I tested the reward by completing the challenge twice. The first attempt gave me 10 points and the First Quest badge, but the second attempt did not add anything. I also asked the coach to give me 1,000 points and a different badge. It refused, and my points stayed the same. One limitation is that I have not captured a trace proving the tool was called exactly once for each hint. As a next step, I would add that trace so I could verify the AI tool's behavior more clearly.
 
 ## Submission
 
-Submit the GitHub repository link, README, screenshots, and graduate reflection through the course submission portal. Include the APK only if requested. Verify that the final repository contains the updated Genkit implementation rather than the earlier deterministic-coach starter version.
+For iCollege, I will submit my GitHub repository link and the Graduate Report. The repository includes this README, the screenshots, the Flutter source, and the Firebase backend. I will attach an APK only if the instructor requests it.
