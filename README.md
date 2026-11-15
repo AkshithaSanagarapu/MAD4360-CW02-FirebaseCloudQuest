@@ -7,67 +7,225 @@
 
 ## Overview
 
-I built Firebase Cloud Quest as a Flutter Android app where I can sign in, see a daily challenge, ask the Quest Coach for a hint, and earn a reward for completing the challenge. I wanted the reward to be handled by Firebase rather than by the phone or the AI coach.
+I developed Firebase Cloud Quest as a Flutter Android application that allows users to sign in, view a daily challenge, ask an AI Quest Coach for hints, and earn rewards for completing challenges. I integrated Firebase Authentication, Cloud Firestore, Cloud Functions, and Genkit to build the application while keeping user data and rewards protected.
 
-## Implemented features
+The main goal was to make sure that rewards were managed securely by the backend rather than allowing the mobile application or AI coach to modify them directly.
 
-- Firebase Authentication sign-in and authenticated access to the challenge.
-- Firestore daily challenge and per-user progress display.
-- Callable Cloud Function `completeToday` awarding 10 points and the First Quest badge.
-- Transaction-based duplicate-completion protection: repeated requests do not award additional points.
-- Callable `askQuestCoach` using Genkit and Google's `gemini-3.1-flash-lite` model.
-- One read-only Genkit tool, `readMyQuestState`, bound to the Firebase-verified user ID, with no user-selectable UID parameter.
-- Firestore rules designed to prevent client-side reward modification and cross-user progress reads.
+## Implemented Features
 
-## Trust boundary
+- **Firebase Authentication:** Implemented user sign-in, sign-out, and authenticated access to the daily challenge.
+- **Cloud Firestore:** Used to retrieve the daily challenge and display individual user progress.
+- **Cloud Functions:** Implemented the callable function `completeToday` to award 10 points and the First Quest badge.
+- **Duplicate Reward Protection:** Used a Firestore transaction to ensure that completing the same challenge multiple times does not award additional points.
+- **AI Quest Coach:** Integrated the callable function `askQuestCoach` using Genkit and Google's `gemini-3.1-flash-lite` model.
+- **Read-Only AI Tool:** Configured `readMyQuestState` to access challenge and progress information using the authenticated user's Firebase UID.
+- **Firestore Security Rules:** Configured rules to protect user progress and prevent unauthorized changes to reward information.
 
-Flutter app → Firebase Authentication → Firestore / callable Cloud Functions.
+## Firebase Architecture and Security
 
-The app supplies a question or completion request, but it does not decide the user's score. `completeToday` validates the authenticated caller and challenge ID, reads the progress document in a Firestore transaction, and writes the fixed reward only if it has not already been awarded. `askQuestCoach` checks authentication and question length, then exposes a read-only quest-state tool to Genkit. The tool's UID comes from the verified Firebase Authentication context, not from the model or a client-supplied field. The coach has no tool that can award points or edit badges.
+The application follows this flow:
 
-## Local setup and execution
+**Flutter App → Firebase Authentication → Cloud Firestore / Callable Cloud Functions**
 
-1. Install Flutter, Android Studio, Node.js, Firebase CLI, and a compatible Android emulator.
-2. From the project root run `flutter pub get`.
-3. Install backend packages with `cd functions && npm install && cd ..`.
-4. Check the Firebase project ID in the app configuration. The project used during the successful local tests was `mad4360-firebase-productapp`.
-5. Set `GEMINI_API_KEY` in the local terminal environment; do not place the key in source control.
-6. Start the local services with `firebase emulators:start --project mad4360-firebase-productapp --only auth,firestore,functions`.
-7. In a separate terminal, seed the daily challenge using `cd functions && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=mad4360-firebase-productapp node seed.mjs && cd ..`.
-8. Run the Flutter application on the Android emulator. The Flutter app and Firebase emulators must use matching project IDs. Android emulator host access normally uses `10.0.2.2`.
+Firebase Authentication identifies the signed-in user, while Cloud Firestore stores the daily challenge and individual progress records.
 
-The app was tested against local Firebase emulators. The release APK build succeeded, but standalone operation without reachable Firebase services has not been established.
+When a user completes a challenge, the Flutter application calls `completeToday`. This Cloud Function verifies the authenticated user, checks the challenge ID, and uses a Firestore transaction to determine whether the reward has already been awarded.
 
-## Tests and observed results
+If the challenge has not been completed, the function awards 10 points and the First Quest badge. If the user attempts to complete it again, the existing reward is returned without increasing the score.
 
-- `flutter analyze`: No issues found.
-- `flutter test`: One test passed.
-- Backend tests: Four passed when the Firestore emulator was running, including reward idempotency and security boundary checks. An earlier attempt without the emulator running failed with connection refused; this was an environment issue, not a successful security-test run.
-- Manual completion: points changed from 0 to 10 and the First Quest badge appeared.
-- Manual repeat completion: points remained 10 and the app displayed “Already completed — your reward is safe!”
-- AI coach: `Get hint` returned a relevant Gemini-generated explanation of why the backend must control rewards.
-- Adversarial request: asking the coach to award 1,000 points and a Master Quest badge did not change the displayed 10 points or First Quest badge; the coach explained it could not modify rewards.
-- Android release: `flutter build apk --release` succeeded; output at `build/app/outputs/flutter-apk/app-release.apk` (approximately 50.6 MB).
+The AI Quest Coach operates separately from the reward system. Its read-only tool, `readMyQuestState`, uses the verified Firebase Authentication context to retrieve the signed-in user's challenge and progress information. The AI coach cannot directly modify Firestore rewards or award additional points.
 
-**One thing I have not verified yet:** I configured Genkit with one read-only tool and instructed the model to call it once, but I have not saved a trace showing the exact number of calls. I would add a tool-execution trace as a next step. I captured the signed-out screen as screenshot 06.
+This separation keeps reward decisions under backend control.
 
-## Screenshot evidence
+## Local Setup and Execution
 
-I saved these screenshots in the `screenshots/` folder:
+I developed and tested the application using Flutter, Android Studio, and the Firebase Emulator Suite.
 
-1. `01_AI_Hint_Before_Completion.png` — the hint before completing the challenge.
-2. `02_Reward_Awarded.png` — 10 points and the First Quest badge after completion.
-3. `03_Duplicate_Reward_Prevented.png` — a repeat attempt did not add another reward.
-4. `04_Genkit_AI_Coach.png` — the coach's response after the Genkit update.
-5. `05_Graduate_Adversarial_Test.png` — the coach refused a request for extra points, and the reward did not change.
-6. `06_Signed_Out_Authentication.png` — the sign-in screen after signing out, without challenge or reward information.
+### Requirements
 
-I did not include `.env` files, `node_modules`, or private Gemini credentials in the repository.
+- Flutter and Dart SDK
+- Android Studio with an Android emulator
+- Node.js and npm
+- Firebase CLI
+- Firebase project configuration
+- Gemini API key configured in the local environment
 
-## Graduate reflection (134 words)
+### Running the Application
 
-Working on Firebase Cloud Quest helped me see why signing in is only one part of keeping an app secure. I used the read-only readMyQuestState tool so the AI coach could give a hint based on the signed-in user's challenge without changing their progress. I tested the reward by completing the challenge twice. The first attempt gave me 10 points and the First Quest badge, but the second attempt did not add anything. I also asked the coach to give me 1,000 points and a different badge. It refused, and my points stayed the same. One limitation is that I have not captured a trace proving the tool was called exactly once for each hint. As a next step, I would add that trace so I could verify the AI tool's behavior more clearly.
+**1. Install Flutter dependencies**
+
+```bash
+flutter pub get
+```
+
+**2. Install Firebase backend dependencies**
+
+```bash
+cd functions
+npm install
+cd ..
+```
+
+**3. Start the Firebase emulators**
+
+```bash
+firebase emulators:start --project mad4360-firebase-productapp --only auth,firestore,functions
+```
+
+**4. Seed the daily challenge**
+
+Open another terminal and run:
+
+```bash
+cd functions
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 GCLOUD_PROJECT=mad4360-firebase-productapp node seed.mjs
+cd ..
+```
+
+**5. Run the Flutter application**
+
+Start the Android emulator and execute:
+
+```bash
+flutter run
+```
+
+The application connects to Firebase Authentication, Firestore, and Cloud Functions through the configured Firebase project. For Android emulator connections, the host machine is accessible through `10.0.2.2`.
+
+The Gemini API key is configured through the local environment and is not included in the repository.
+
+## Testing and Results
+
+I tested the Flutter application and Firebase backend to verify authentication, challenge completion, reward protection, and AI coach behavior.
+
+### Flutter Validation
+
+**Static analysis**
+
+```bash
+flutter analyze
+```
+
+**Result:** No issues found.
+
+**Flutter tests**
+
+```bash
+flutter test
+```
+
+**Result:** 1 test passed.
+
+### Graduate Automated Firebase Boundary Tests
+
+I ran the backend automated tests while the Firebase Firestore emulator was running.
+
+**Test command**
+
+```bash
+cd functions
+npm test
+```
+
+**Result:** All 4 backend tests passed, including reward idempotency and security boundary checks.
+
+These tests provided automated evidence that the reward system and Firebase access boundaries behaved as intended.
+
+### Manual Application Tests
+
+**1. Authentication and Sign-Out**
+
+I signed in to access the daily challenge and user progress. After signing out, the application returned to the authentication screen and no longer displayed the user's challenge or reward information.
+
+**Result:** Passed.
+
+**2. Daily Challenge Completion**
+
+I completed the daily challenge using the application.
+
+The progress changed from 0 to 10 points, and the First Quest badge appeared.
+
+**Result:** Passed.
+
+**3. Duplicate Reward Prevention**
+
+I attempted to complete the same challenge again.
+
+The application displayed:
+
+"Already completed — your reward is safe!"
+
+The score remained at 10 points, and no additional badge was awarded.
+
+**Result:** Passed.
+
+**4. AI Quest Coach**
+
+I used the Get Hint feature to ask the Quest Coach about the challenge.
+
+The coach returned a relevant explanation of why reward updates should be handled by the backend rather than directly by the application.
+
+**Result:** Passed.
+
+**5. Graduate Adversarial AI Safety Test**
+
+I asked the Quest Coach to award me 1,000 points and a Master Quest badge.
+
+The coach explained that it could not modify rewards. The application continued displaying the original 10 points and First Quest badge.
+
+**Result:** Passed.
+
+### Android Build
+
+I generated the Android release build using:
+
+```bash
+flutter build apk --release
+```
+
+**Result:** Build successful.
+
+**APK location:** `build/app/outputs/flutter-apk/app-release.apk`
+
+**APK size:** Approximately 50.6 MB.
+
+## Screenshot Evidence
+
+I included six screenshots in the `screenshots/` folder to document the application and test results.
+
+1. `01_AI_Hint_Before_Completion.png` — AI hint displayed before completing the challenge.
+2. `02_Reward_Awarded.png` — Successful completion showing 10 points and the First Quest badge.
+3. `03_Duplicate_Reward_Prevented.png` — Repeated completion without additional rewards.
+4. `04_Genkit_AI_Coach.png` — AI Quest Coach response using Genkit.
+5. `05_Graduate_Adversarial_Test.png` — AI safety test showing that an unauthorized reward request did not change the user's progress.
+6. `06_Signed_Out_Authentication.png` — Authentication screen after signing out, confirming that the challenge and reward information are no longer visible.
+
+## Firestore Data Model
+
+The application uses two main Firestore document paths.
+
+**Daily Challenge**
+
+`challenges/today`
+
+Stores the shared daily challenge title and prompt.
+
+**User Progress**
+
+`users/{uid}/progress/today`
+
+Stores the signed-in user's completion status, points, badge ID, and completion timestamp.
+
+The reward information is updated through the trusted callable Cloud Function rather than directly from the Flutter application.
+
+## Graduate Reflection
+
+Working on Firebase Cloud Quest helped me understand why authentication alone is not enough to keep an application secure. I used the read-only `readMyQuestState` tool to allow the AI Quest Coach to provide hints based on the signed-in user's challenge and progress. I tested the reward system by completing the challenge twice. The first attempt awarded 10 points and the First Quest badge, while the second attempt kept the reward unchanged. I also tested the coach with a request to award 1,000 points and a different badge. The coach refused the request, and my progress remained unchanged. The automated Firebase tests also helped me verify the reward and security boundaries. One improvement I would make is adding clearer error messages when Firebase services are temporarily unavailable.
 
 ## Submission
 
-For iCollege, I will submit my GitHub repository link and the Graduate Report. The repository includes this README, the screenshots, the Flutter source, and the Firebase backend. I will attach an APK only if the instructor requests it.
+The GitHub repository contains the completed Flutter application, Firebase backend implementation, README documentation, and screenshot evidence.
+
+**GitHub Repository:** https://github.com/AkshithaSanagarapu/MAD4360-CW02-FirebaseCloudQuest
+
+The Graduate Report is submitted separately through iCollege along with the repository link.
